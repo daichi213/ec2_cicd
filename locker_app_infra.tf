@@ -195,9 +195,34 @@ resource "aws_key_pair" "my_key_pair" {
 
 # ====================
 #
-# IAM Policy
+# IAM Role
 #
 # ====================
+resource "aws_iam_instance_profile" "instance_role" {
+    name = "JenkinsAccess"
+    roles = ["${aws_iam_role.instance_role.name}"]
+}
+
+resource "aws_iam_role" "instance_role" {
+    name = "JenkinsAccess"
+    assume_role_policy = jsonencode({
+      "Version": "2012-10-17",
+      "Statement": [
+          {
+              "Effect": "Allow",
+              "Action": [
+                  "sts:AssumeRole"
+              ],
+              "Principal": {
+                  "Service": [
+                      "ec2.amazonaws.com"
+                  ]
+              }
+          }
+      ]
+    })
+}
+
 resource "aws_iam_policy" "code_pipeline_policy" {
   name        = "code_pipeline_policy"
   path        = "/"
@@ -222,3 +247,10 @@ resource "aws_iam_policy" "code_pipeline_policy" {
     "Version": "2012-10-17"
   })
 }
+
+# ====================
+#
+# IAM Role
+#
+# ====================
+
