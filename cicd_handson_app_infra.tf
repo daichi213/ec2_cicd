@@ -15,12 +15,13 @@ provider "aws" {
   version    = "~> 3.0"
 }
 
+
 # ====================
 #
 # VPC
 #
 # ====================
-resource "aws_vpc" "locker_app_vpc" {
+resource "aws_vpc" "cicd_handson_app_vpc" {
   cidr_block                       = "10.1.0.0/16"
   enable_dns_hostnames             = true
   enable_dns_support               = true
@@ -28,31 +29,19 @@ resource "aws_vpc" "locker_app_vpc" {
   assign_generated_ipv6_cidr_block = true
 
   tags = {
-    Name = "locker_app_vpc"
+    Name = "cicd_handson_app_vpc"
   }
 }
 
 
 # ====================
 #
-# Internet Gateway
-#
-# ====================
-resource "aws_internet_gateway" "locker_app_gateway" {
-  vpc_id = aws_vpc.locker_app_vpc.id
-
-  tags = {
-    Name = "locker_app_gateway"
-  }
-}
-# ====================
-#
-# Subnet
+# Subnet(Public)
 #
 # ====================
 resource "aws_subnet" "public_1a" {
-  vpc_id            = "${aws_vpc.locker_app_vpc.id}"
-  cidr_block        = cidrsubnet(aws_vpc.locker_app_vpc.cidr_block, 8, 1)
+  vpc_id            = "${aws_vpc.cicd_handson_app_vpc.id}"
+  cidr_block        = "10.1.10.0/24"
   availability_zone = "ap-northeast-1a"
   # trueにするとインスタンスにパブリックIPアドレスを自動的に割り当ててくれる
   map_public_ip_on_launch = true
@@ -62,30 +51,119 @@ resource "aws_subnet" "public_1a" {
   }
 }
 
+resource "aws_subnet" "public_1b" {
+  vpc_id            = "${aws_vpc.cicd_handson_app_vpc.id}"
+  cidr_block        = "10.1.20.0/24"
+  availability_zone = "ap-northeast-1b"
+  # trueにするとインスタンスにパブリックIPアドレスを自動的に割り当ててくれる
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "public_1b"
+  }
+}
+
+# ====================
+#
+# Subnet(Private)
+#
+# ====================
+resource "aws_subnet" "private_1a" {
+  vpc_id            = "${aws_vpc.cicd_handson_app_vpc.id}"
+  cidr_block        = "10.1.15.0/24"
+  availability_zone = "ap-northeast-1a"
+  # trueにするとインスタンスにパブリックIPアドレスを自動的に割り当ててくれる
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "private_1a"
+  }
+}
+
+resource "aws_subnet" "private_1b" {
+  vpc_id            = "${aws_vpc.cicd_handson_app_vpc.id}"
+  cidr_block        = "10.1.25.0/24"
+  availability_zone = "ap-northeast-1b"
+  # trueにするとインスタンスにパブリックIPアドレスを自動的に割り当ててくれる
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "private_1b"
+  }
+}
+
+# ====================
+#
+# Internet Gateway
+#
+# ====================
+resource "aws_internet_gateway" "cicd_handson_app_gateway" {
+  vpc_id = aws_vpc.cicd_handson_app_vpc.id
+
+  tags = {
+    Name = "cicd_handson_app_gateway"
+  }
+}
+
 
 # ====================
 #
 # Route Table
 #
 # ====================
-resource "aws_route_table" "locker_app_route_table" {
-  vpc_id = aws_vpc.locker_app_vpc.id
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.cicd_handson_app_vpc.id
 
   tags = {
-    Name = "locker_app_route_table"
+    Name = "public"
   }
 }
 
-resource "aws_route" "locker_app_route" {
-  gateway_id             = aws_internet_gateway.locker_app_gateway.id
-  route_table_id         = aws_route_table.locker_app_route_table.id
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.cicd_handson_app_vpc.id
+
+  tags = {
+    Name = "private"
+  }
+}
+
+# ====================
+#
+# Route
+#
+# ====================
+resource "aws_route" "public" {
+  gateway_id             = aws_internet_gateway.cicd_handson_app_gateway.id
+  route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
 }
 
-resource "aws_route_table_association" "example" {
+
+# ====================
+#
+# Route Table Association
+#
+# ====================
+resource "aws_route_table_association" "public_1a_route_table_association" {
   subnet_id      = "${aws_subnet.public_1a.id}"
-  route_table_id = "${aws_route_table.locker_app_route_table.id}"
+  route_table_id = "${aws_route_table.public.id}"
 }
+
+resource "aws_route_table_association" "public_1b_route_table_association" {
+  subnet_id      = "${aws_subnet.public_1b.id}"
+  route_table_id = "${aws_route_table.public.id}"
+}
+
+resource "aws_route_table_association" "private_1a_route_table_association" {
+  subnet_id      = "${aws_subnet.private_1a.id}"
+  route_table_id = "${aws_route_table.private.id}"
+}
+
+resource "aws_route_table_association" "private_1b_route_table_association" {
+  subnet_id      = "${aws_subnet.private_1b.id}"
+  route_table_id = "${aws_route_table.private.id}"
+}
+
 
 # ====================
 #
@@ -93,7 +171,7 @@ resource "aws_route_table_association" "example" {
 #
 # ====================
 resource "aws_security_group" "security_rule" {
-  vpc_id = aws_vpc.locker_app_vpc.id
+  vpc_id = aws_vpc.cicd_handson_app_vpc.id
   name   = "security_rule"
 
   tags = {
@@ -101,6 +179,11 @@ resource "aws_security_group" "security_rule" {
   }
 }
 
+# ====================
+#
+# Security Rules
+#
+# ====================
 # インバウンドルール(ssh接続用)
 resource "aws_security_group_rule" "in_ssh" {
   security_group_id = aws_security_group.security_rule.id
@@ -122,14 +205,14 @@ resource "aws_security_group_rule" "in_icmp" {
 }
 
 # インバウンドルール(httpアクセス用)
-# resource "aws_security_group_rule" "in_http" {
-#   security_group_id = aws_security_group.security_rule.id
-#   type              = "ingress"
-#   cidr_blocks       = ["0.0.0.0/0"]
-#   from_port         = 80
-#   to_port           = 80
-#   protocol          = "tcp"
-# }
+resource "aws_security_group_rule" "in_http" {
+  security_group_id = aws_security_group.security_rule.id
+  type              = "ingress"
+  cidr_blocks       = ["0.0.0.0/0"]
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+}
 
 # インバウンドルール(httpsアクセス用)
 # resource "aws_security_group_rule" "in_https" {
@@ -151,23 +234,13 @@ resource "aws_security_group_rule" "out_all" {
   protocol          = "-1"
 }
 
-# ====================
-#
-# Elastic IP
-#
-# ====================
-resource "aws_eip" "my_eip" {
-  instance   = aws_instance.locker_app_instance.id
-  vpc        = true
-  depends_on = [aws_internet_gateway.locker_app_gateway]
-}
 
 # ====================
 #
 # EC2 Instance
 #
 # ====================
-resource "aws_instance" "locker_app_instance" {
+resource "aws_instance" "cicd_handson_app_instance" {
   ami                    = "ami-0ce107ae7af2e92b5"
   vpc_security_group_ids = [aws_security_group.security_rule.id]
   subnet_id              = aws_subnet.public_1a.id
@@ -175,12 +248,25 @@ resource "aws_instance" "locker_app_instance" {
   instance_type          = "t2.micro"
   monitoring             = false
   tags = {
-    Name = "locker_app_instance"
+    Name = "cicd_handson_app_instance"
   }
   lifecycle {
     prevent_destroy = false
   }
 }
+
+
+# ====================
+#
+# Elastic IP
+#
+# ====================
+resource "aws_eip" "my_eip" {
+  instance   = aws_instance.cicd_handson_app_instance.id
+  vpc        = true
+  depends_on = [aws_internet_gateway.cicd_handson_app_gateway]
+}
+
 
 # ====================
 #
@@ -192,6 +278,7 @@ resource "aws_key_pair" "my_key_pair" {
   key_name   = "my_key_pair"
   public_key = file(".ssh/my_key_pair")
 }
+
 
 # ====================
 #
@@ -247,6 +334,7 @@ resource "aws_iam_policy" "code_pipeline_policy" {
     "Version": "2012-10-17"
   })
 }
+
 
 # ====================
 #
