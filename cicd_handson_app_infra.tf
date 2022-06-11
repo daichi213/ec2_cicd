@@ -106,6 +106,29 @@ resource "aws_internet_gateway" "cicd_handson_app_gateway" {
 }
 
 
+####################
+# NATGW
+####################
+resource "aws_eip" "natgw" {
+  vpc = true
+
+  tags = {
+    Name = "natgw-fargate-deploy"
+  }
+}
+
+resource "aws_nat_gateway" "natgw" {
+  allocation_id = aws_eip.natgw.id
+  subnet_id     = aws_subnet.public_1a.id
+
+  tags = {
+    Name = "natgw"
+  }
+
+  depends_on = [aws_internet_gateway.igw]
+}
+
+
 # ====================
 #
 # Route Table
