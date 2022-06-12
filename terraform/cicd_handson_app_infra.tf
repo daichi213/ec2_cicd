@@ -263,7 +263,7 @@ resource "aws_security_group_rule" "out_all" {
 # EC2 Instance
 #
 # ====================
-resource "aws_instance" "cicd_handson_app_instance" {
+resource "aws_instance" "jenkins" {
   ami                    = "ami-0ce107ae7af2e92b5"
   vpc_security_group_ids = [aws_security_group.security_rule.id]
   subnet_id              = aws_subnet.public_1a.id
@@ -271,25 +271,65 @@ resource "aws_instance" "cicd_handson_app_instance" {
   instance_type          = "t2.micro"
   monitoring             = false
   tags = {
-    Name = "cicd_handson_app_instance"
+    Name = "jenkins"
   }
   lifecycle {
     prevent_destroy = false
   }
 }
 
+resource "aws_instance" "development" {
+  ami                    = "ami-0ce107ae7af2e92b5"
+  vpc_security_group_ids = [aws_security_group.security_rule.id]
+  subnet_id              = aws_subnet.public_1a.id
+  key_name               = aws_key_pair.my_key_pair.id
+  instance_type          = "t2.micro"
+  monitoring             = false
+  tags = {
+    Name = "development"
+  }
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_instance" "production" {
+  ami                    = "ami-0ce107ae7af2e92b5"
+  vpc_security_group_ids = [aws_security_group.security_rule.id]
+  subnet_id              = aws_subnet.public_1a.id
+  key_name               = aws_key_pair.my_key_pair.id
+  instance_type          = "t2.micro"
+  monitoring             = false
+  tags = {
+    Name = "production"
+  }
+  lifecycle {
+    prevent_destroy = false
+  }
+}
 
 # ====================
 #
 # Elastic IP
 #
 # ====================
-resource "aws_eip" "my_eip" {
-  instance   = aws_instance.cicd_handson_app_instance.id
+resource "aws_eip" "jenkins_eip" {
+  instance   = aws_instance.jenkins.id
   vpc        = true
   depends_on = [aws_internet_gateway.cicd_handson_app_gateway]
 }
 
+resource "aws_eip" "development_eip" {
+  instance   = aws_instance.development.id
+  vpc        = true
+  depends_on = [aws_internet_gateway.cicd_handson_app_gateway]
+}
+
+resource "aws_eip" "production_eip" {
+  instance   = aws_instance.production.id
+  vpc        = true
+  depends_on = [aws_internet_gateway.cicd_handson_app_gateway]
+}
 
 # ====================
 #
@@ -315,49 +355,35 @@ resource "aws_iam_instance_profile" "instance_role" {
 
 resource "aws_iam_role" "instance_role" {
     name = "JenkinsAccess"
-    assume_role_policy = jsonencode({
-      "Version": "2012-10-17",
-      "Statement": [
-          {
-              "Effect": "Allow",
-              "Action": [
-                  "sts:AssumeRole"
-              ],
-              "Principal": {
-                  "Service": [
-                      "ec2.amazonaws.com"
-                  ]
-              }
-          }
-      ]
-    })
+    description = "The role for a instance with jenkins"
+    assume_role_policy = file("./roles/instance_role.json")
 }
 
+resource "aws_iam_role" "code_pipeline_service_role" {
+    name        = "codepipeline_service_role"
+    description = "The role for a code pipeline"
+    policy = file("./roles/code_pipeline_assume_role.json")
+}
+
+
+# ====================
+#
+# IAM Policy
+#
+# ====================
 resource "aws_iam_policy" "code_pipeline_policy" {
   name        = "code_pipeline_policy"
-  path        = "/"
+  role        = aws_iam_role.code_pipeline_service_role.name
   description = "The policy for a code pipeline"
-
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression result to valid JSON syntax.
-  policy = jsonencode({
-    "Statement": [
-        {
-            "Action": [
-                "codepipeline:AcknowledgeJob",
-                "codepipeline:GetJobDetails",
-                "codepipeline:PollForJobs",
-                "codepipeline:PutJobFailureResult",
-                "codepipeline:PutJobSuccessResult"
-            ],
-            "Effect": "Allow",
-            "Resource": "*"
-        }
-    ],
-    "Version": "2012-10-17"
-  })
+  policy = file("./policies/code_pipeline_policy.json")
 }
 
+resource "aws_iam_policy" "instance_with_jenkins_policy" {
+  name        = "instance_with_jenkins_policy"
+  role        = aws_iam_role.instance_role.name
+  description = "The policy for a code pipeline"
+  policy = file("./policies/instance_with_jenkins_policy.json")
+}
 
 # ====================
 #
