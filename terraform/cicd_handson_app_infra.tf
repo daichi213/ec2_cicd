@@ -359,7 +359,7 @@ resource "aws_iam_role" "instance_role" {
     assume_role_policy = file("./roles/instance_role.json")
 }
 
-resource "aws_iam_role" "code_pipeline_service_role" {
+resource "aws_iam_role" "codepipeline_service_role" {
     name        = "codepipeline_service_role"
     description = "The role for a code pipeline"
     policy = file("./roles/code_pipeline_assume_role.json")
@@ -387,7 +387,165 @@ resource "aws_iam_policy" "instance_with_jenkins_policy" {
 
 # ====================
 #
-# IAM Role
+# Code Commit
 #
 # ====================
+resource "aws_codecommit_repository" "cicd_handson_app_repo" {
+  repository_name = "cicd_handson_app_repo"
+  description     = "The repository for CI/CD tutorial on AWS"
+}
 
+
+# ====================
+#
+# S3
+#
+# ====================
+resource "aws_s3_bucket" "pipeline" {
+  bucket = "s3-fargate-deploy"
+  acl    = "private"
+}
+
+
+# ====================
+#
+# CodePipeline
+#
+# ====================
+resource "aws_codepipeline" "cp-01" {
+  name     = local.cp-01["name"]
+  role_arn = aws_iam_role.cp-01-role.arn
+
+  artifact_store {
+    location = aws_s3_bucket.artifact_store.bucket
+    type     = "S3"
+  }
+
+  stage {
+    name = "Source"
+
+    action {
+      run_order        = 1
+      name             = "Source"
+      namespace        = "SourceVariables"
+      category         = "Source"
+      owner            = "AWS"
+      provider         = "CodeCommit"
+      version          = "1"
+      output_artifacts = ["SourceArtifact"]
+
+      configuration = {
+        RepositoryName       = aws_codecommit_repository.repo-01.repository_name
+        BranchName           = "master"
+        OutputArtifactFormat = "CODE_ZIP"
+        PollForSourceChanges = "false"
+      }
+    }
+  }
+
+  stage {
+    name = "Build"
+
+    action {
+      name            = "Build"
+      namespace       = "BuildVariables"
+      category        = "Build"
+      owner           = "AWS"
+      provider        = "CodeBuild"
+      input_artifacts = ["SourceArtifact"]
+      ## output_artifacts = ["BuildArtifact"]
+      version = "1"
+
+      configuration = {
+        ProjectName = aws_codebuild_project.cb-01.name
+      }
+    }
+  }
+
+}
+
+# TODO 大元
+resource "aws_codepipeline" "pipeline" {
+  name     = "pipeline-fargate-deploy"
+  role_arn = aws_iam_role.codepipeline_service_role.arn
+ 
+  artifact_store {
+    location = aws_s3_bucket.pipeline.bucket
+    type     = "S3"
+  }
+ 
+  stage {
+    name = "Source"
+ 
+    action {
+      run_order        = 1
+      name             = "Source"
+      namespace        = "SourceVariables"
+      category         = "Source"
+      owner            = "AWS"
+      provider         = "CodeCommit"
+      version          = "1"
+      output_artifacts = ["source_output"]
+ 
+      configuration = {
+        Owner                = "Teraoka-Org"
+        Repo                 = "fargate-deploy-test"
+        Branch               = "master"
+        PollForSourceChanges = "false"
+      }
+    }
+  }
+ 
+  stage {
+    name = "Build"
+ 
+    action {
+      name             = "Build"
+      category         = "Build"
+      owner            = "AWS"
+      provider         = "CodeBuild"
+      input_artifacts  = ["source_output"]
+      output_artifacts = ["build_output"]
+      version          = "1"
+ 
+      configuration = {
+        ProjectName = aws_codebuild_project.project.name
+      }
+    }
+  }
+ 
+  stage {
+    name = "Deploy"
+ 
+    action {
+      name            = "Deploy"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = "ECS"
+      input_artifacts = ["build_output"]
+      version         = "1"
+ 
+      configuration = {
+        ClusterName = aws_ecs_cluster.cluster.arn
+        ServiceName = aws_ecs_service.service.name
+        FileName    = "imagedef.json"
+      }
+    }
+  }
+}
+ 
+resource "aws_codepipeline_webhook" "webhook" {
+  name            = "webhook-fargate-deploy"
+  authentication  = "GITHUB_HMAC"
+  target_action   = "Source"
+  target_pipeline = aws_codepipeline.pipeline.name
+ 
+  authentication_configuration {
+    secret_token = aws_ssm_parameter.github_personal_access_token.value
+  }
+ 
+  filter {
+    json_path    = "$.ref"
+    match_equals = "refs/heads/{Branch}"
+  }
+}
