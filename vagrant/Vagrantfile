@@ -16,14 +16,14 @@ Vagrant.configure("2") do |config|
 
     node.vm.provision "shell", inline: <<-SHELL
       apt-get update
-      # apt-get install -y bzip2-devel git patch gcc openssl-devel python3-pip
       apt-get install -y python3-pip
-      # add-apt-repository --yes --update ppa:ansible/ansible
       /usr/bin/pip install ansible
       echo 'PATH=/usr/bin:$PATH' >> ~/.bashrc
       cp -p /home/vagrant/keys/my_key_pair /root/.ssh/id_rsa
       chmod 600 /root/.ssh/id_rsa
       chown root:root /root/.ssh/id_rsa
+      # jenkinsサーバーの構築コマンド
+      # ansible-playbook -i /etc/ansible/ansible/jenkins /etc/ansible/ansible/site.yml
     SHELL
   end
 
